@@ -1,5 +1,5 @@
 #include "grille.h"
-#include "test.c"
+#include "test.h"
 
 
 
