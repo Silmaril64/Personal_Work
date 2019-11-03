@@ -1,0 +1,23 @@
+# depslib dependency file v1.0
+1560503820 source:c:\users\quentin\desktop\demineur\main.c
+	"grille.h"
+	"test.c"
+
+1560494144 c:\users\quentin\desktop\demineur\grille.h
+
+1560414730 c:\users\quentin\desktop\demineur\test.c
+	<stdio.h>
+	<stdlib.h>
+	"grille.h"
+
+1560503787 source:c:\users\quentin\desktop\demineur\grille.c
+	<stdio.h>
+	<stdlib.h>
+	<time.h>
+	"grille.h"
+
+1560415309 source:c:\users\quentin\desktop\demineur\test.c
+	<stdio.h>
+	<stdlib.h>
+	"grille.h"
+
