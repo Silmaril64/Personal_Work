@@ -1,0 +1,1 @@
+proposé par lsimon, prendre une formule SAT (ou nreines, ...) et dessiner l'aspect de l'espace des solutions 	
