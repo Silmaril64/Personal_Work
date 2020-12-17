@@ -3,6 +3,7 @@ import pygame
 import pygame.draw
 import random
 import numpy as np
+import heapq
 
 #Système de carte d'influence
 
@@ -19,6 +20,8 @@ import numpy as np
 # (OU toutes les ressources prises ?
 # possiblement deux modes de jeu)
 # Score -> ressources !!!
+
+#ON POURRAIT ETRE CORROMPU EN MOURANT ET ESSAYER DE TUER LES AUTRES EN LES TOUCHANT !!!
 
 board_size = (50,50) 
 square_size = 20
@@ -45,7 +48,8 @@ NB_MULT = 10 # Nombre de générateurs produits lors de la corruption d'une ress
 #(rend le farming d'une ressource en danger bien plus dangereux)
 REZ = 100.0
 ORIGIN_DANGER = 2.0 # Pour construire la carte d'influence de l'IA
-DESCRIPTION_IA_LEVEL = [1.0, 0.5, 0.25, 0.1, 0.01] # Nombre de secondes à attendre avant de recalculer une nouvelle stratégie 
+DESCRIPTION_IA_LEVEL = [1.0, 0.5, 0.25, 0.1, 0.01] # Nombre de secondes à attendre avant de recalculer une nouvelle
+# stratégie 
      
 
 class Ressource:
@@ -79,6 +83,7 @@ class Player:
         self._name = name
         self._IA_power = IA_power # None pour un joueur humain, pour un bot, pourrait etre toute les cbien de frame
         #il met à jour ses cartes d'influence
+        self._path = [] # Encore une fois, pour les IA, stocker le chemin calculé à la derniere mise a jour
         
 
         
@@ -101,8 +106,11 @@ class Map: # Fait tous les calculs en interne
         self._corruption_map = np.zeros(board_size, dtype = float)
         self.nb_player = nb_player
         self._speed_corruption = speed_corruption
-        self._players = [Player(name_players[i], power_players[i]) for i in  range(nb_player)] 
+        self._players = [Player(name_players[i], power_players[i]) for i in  range(nb_player)]
+        self._human_players = [ i for i in range(self.nb_player) if self._players[i][1] == None] 
         self._screen = np.ones((board_size[0], board_size[1],3), dtype = int) * 255
+        self._influence_map = None # pour eviter, en cas de multiples IA, de recalculer la même map
+        self._best_influence_map = None
 
         for r in self._ressources: # Les ressources sont vertes
             self._screen[r._x][r._y][1] = 255
@@ -221,6 +229,8 @@ class Map: # Fait tous les calculs en interne
                         self._screen[p._x][p._y][2] = 255
 
     def update(self, t):
+        self._influence_map = None
+        self._best_influence_map = None
         #print("debut update")
         self.calculatePlayers(t)
         #print("fin update")
@@ -278,59 +288,85 @@ class Map: # Fait tous les calculs en interne
         self._game.blit(self._font.render(text,1,color),position)
 
 
+def AStar(m : Map, p : Player, to_ressources = True):
+    if to_ressources:
+        goal_couple = m._best_influence_map[1]
+        base_cost = m._best_influence_map[0] + 1 # a ajouter a toutes les cases  pour calculer le poids (donc strict. psitif)
+
+        states = np.zeros(board_size, dtype = int) # not seen == 0 / seen (neighbours) == 1 / integrated == 2
+        neighbours = [(np.sqrt( (p._x - goal_couple[0])**2 + (p._y - goal_couple[1])**2) + 0,(p._x, p._y))] #np.sqrt( (p._x - i)**2 + (p._y - j)**2) + deja_fait
+        heapq.heapify(neighbours)
+
+        while neighbours != []:
+            current = heapq.heappop(neighbours)
+            if current == goal_couple:
+                # comaprer tous ses voisins pour savoir duquel je viens
+                #(donc du voisin intégré le plus proche, en pensant à prendre en compte le poids !
+
+    else:
+        
+
 def IA(t, m : Map, p : Player):
 
+    if (p._alive):
     ############### PARTIE CREATION CARTE D'INFLUENCE ###############
-    influence = np.zeros(board_size, dtype = float)
+        if m._influence_map == None: 
+            influence = np.zeros(board_size, dtype = float)
 
-    for i in range(board_size[0]):
-        for j in range(board_size[1]):
-            influence[i][j] -= m._corruption_map[i][j]
+            for i in range(board_size[0]):
+                for j in range(board_size[1]):
+                    influence[i][j] -= m._corruption_map[i][j]
 
-    for o in m._corruption_origins:
+            for o in m._corruption_origins:
         
-        for i in range(3):
-            for j in range(3 - i):
-                tempo = 1 + i + j # Harmonique
-                influence[o[0] + i][o[1] + j] -=  ORIGIN_DANGER / tempo
-                influence[o[0] + i][o[1] - j] -=  ORIGIN_DANGER / tempo
-                influence[o[0] - i][o[1] + j] -=  ORIGIN_DANGER / tempo
-                influence[o[0] - i][o[1] - j] -=  ORIGIN_DANGER / tempo
+                for i in range(3):
+                    for j in range(3 - i):
+                        tempo = 1 + i + j # Harmonique
+                        influence[o[0] + i][o[1] + j] -=  ORIGIN_DANGER / tempo
+                        influence[o[0] + i][o[1] - j] -=  ORIGIN_DANGER / tempo
+                        influence[o[0] - i][o[1] + j] -=  ORIGIN_DANGER / tempo
+                        influence[o[0] - i][o[1] - j] -=  ORIGIN_DANGER / tempo
 
-    for r in m._ressources:
+            for r in m._ressources:
 
-        for i in range(10):
-            for j in range(10 - i):
-                tempo = (i + j + 1)**2
-                influence[o[0] + i][o[1] + j] +=  ORIGIN_DANGER / tempo
-                influence[o[0] + i][o[1] - j] +=  ORIGIN_DANGER / tempo
-                influence[o[0] - i][o[1] + j] +=  ORIGIN_DANGER / tempo
-                influence[o[0] - i][o[1] - j] +=  ORIGIN_DANGER / tempo
-
+                for i in range(10):
+                    for j in range(10 - i):
+                        tempo = (i + j + 1)**2 # Real gain
+                        influence[o[0] + i][o[1] + j] +=  ORIGIN_DANGER / tempo
+                        influence[o[0] + i][o[1] - j] +=  ORIGIN_DANGER / tempo
+                        influence[o[0] - i][o[1] + j] +=  ORIGIN_DANGER / tempo
+                        influence[o[0] - i][o[1] - j] +=  ORIGIN_DANGER / tempo
+            m._influence_map = influence
     ############### PARTIE CREATION STRATEGIE (déplacement) ###############
-
+        if m._best_influence_map == None: # Normalement lié avec la condition d'avant
     #Trouver la meilleure case (score le plus haut + le plus proche (en ligne droite, ou si des obstacles
     # utiliser prétraitement))
     # TODO: Si le temps, rajouter des obstacles
-    current = - ORIGIN_DANGER * 7 - 1 # Théoriquement, inférieur au minimum atteignable
+            current = - ORIGIN_DANGER * 7 - 1 # Théoriquement, inférieur au minimum atteignable
     # (! pas tout à fait si superposition d'origines !) -> aucune importance en pratique,
     #il existe toujours des cases meilleures dans ce cas-là
-    curr_dist = -1
-    curr_couple = (-1,-1)
+            curr_dist = -1
+            curr_couple = (-1,-1)
 
-    for i in range(board_size[0]):
-        for j in range(board_size[1]):
-            if influence[i][j] > current:
-                current = influence[i][j]
-                curr_couple = (i,j)
-            elif influence[i][j] == current:
-                tempo = np.sqrt( (p._x - i)**2 + (p._y - j)**2)
-                if tempo < curr_dist:
-                    curr_dist = tempo
-                    current = influence[i][j]
-                    curr_couple = (i,j)
+            for i in range(board_size[0]):
+                for j in range(board_size[1]):
+                    if influence[i][j] > current:
+                        current = influence[i][j]
+                        curr_couple = (i,j)
+                    elif influence[i][j] == current:
+                        tempo = np.sqrt( (p._x - i)**2 + (p._y - j)**2) # Garder le plus proche de nous
+                        if tempo < curr_dist:
+                            curr_dist = tempo
+                            current = influence[i][j]
+                            curr_couple = (i,j)
+            m._best_influence_map = (current, curr_couple)
     # Maintenant, il faut trouver un bon chemin pour y arriver, et le stocker en attendant de recalculer
-    # (penser à le stocker en sens inverse pour pop gratuitement) 
+    # (penser à le stocker en sens inverse pour pop gratuitement)
+
+        p._path = AStar(m, p, True)
+    else: # player mort, donc mode zombie activé)
+        p._path = AStar(m, p, False)
+        
                     
 
 def main():

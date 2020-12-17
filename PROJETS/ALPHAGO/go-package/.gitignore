@@ -1,0 +1,4 @@
+variables/
+model.pb
+saved_model.pb
+data/
