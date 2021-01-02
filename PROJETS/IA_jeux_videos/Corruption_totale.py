@@ -24,32 +24,35 @@ import heapq
 #ON POURRAIT ETRE CORROMPU EN MOURANT ET ESSAYER DE TUER LES AUTRES EN LES TOUCHANT !!!
 
 board_size = (50,50) 
-square_size = 20
+square_size = 15
 screen_size = (board_size[0] * square_size, board_size[1] * square_size)
 
 
 MAX_RESSOURCE_VALUE = 5.0
-MIN_RESSOURCE_VALUE = 0.5
+MIN_RESSOURCE_VALUE = 5.0
 
-MAX_NB_RESSOURCES = 5
-MIN_NB_RESSOURCES = 3
+MAX_NB_RESSOURCES = 25
+MIN_NB_RESSOURCES = 15
 
 MAX_CORRUPTION_VALUE = 1.0
 MIN_CORRUPTION_VALUE = 1.0
 
 DELTA_THRESHOLD = 0.1
-NB_PLAYER = 2
-NAMES = ["Joueur", "IA"]
-POWERS = [None, 4]
+NB_PLAYER = 3
+NAMES = ["IA", "IA", "IA"] #"Joueur"
+POWERS = [0, 1, 2]#None
 NB_CORRUPTION_POINTS = 20
 CORRUPT_P_THRESHOLD = 0.75
 CORRUPTION_TOTALE = 1.0 # Chance qu'une case complètement corrompue devienne un générateur
-NB_MULT = 10 # Nombre de générateurs produits lors de la corruption d'une ressource
+NB_MULT = 5 # Nombre de générateurs produits lors de la corruption d'une ressource
 #(rend le farming d'une ressource en danger bien plus dangereux)
 REZ = 100.0
 ORIGIN_DANGER = 2.0 # Pour construire la carte d'influence de l'IA
 DESCRIPTION_IA_LEVEL = [1.0, 0.5, 0.25, 0.1, 0.01] # Nombre de secondes à attendre avant de recalculer une nouvelle
-# stratégie 
+# stratégie
+
+SPEED_ALIVE = None # La durée entre chaque mouvement (pour ne pas faire un dieu qui se TP)
+SPEED_DEAD = None # Meme chose, mais pour le mode zombie (pour ne pas se téléporter sur le joueur pour l'instakill)
      
 
 class Ressource:
@@ -84,6 +87,8 @@ class Player:
         self._IA_power = IA_power # None pour un joueur humain, pour un bot, pourrait etre toute les cbien de frame
         #il met à jour ses cartes d'influence
         self._path = [] # Encore une fois, pour les IA, stocker le chemin calculé à la derniere mise a jour
+        self._delta = 0
+        self._nb_moves = 1 # Pour bouger sans avoir à reset le delta, utilisé pour accumuler le temps pour la MaJ du path
         
 
         
@@ -107,7 +112,7 @@ class Map: # Fait tous les calculs en interne
         self.nb_player = nb_player
         self._speed_corruption = speed_corruption
         self._players = [Player(name_players[i], power_players[i]) for i in  range(nb_player)]
-        self._human_players = [ i for i in range(self.nb_player) if self._players[i][1] == None] 
+        self._human_players = [ i for i in range(self.nb_player) if self._players[i]._IA_power == None] 
         self._screen = np.ones((board_size[0], board_size[1],3), dtype = int) * 255
         self._influence_map = None # pour eviter, en cas de multiples IA, de recalculer la même map
         self._best_influence_map = None
@@ -219,8 +224,8 @@ class Map: # Fait tous les calculs en interne
                 #dans la corruption pure
                 if p._life <= 0:
                     if p._points >= REZ:
-                        p.points -= REZ
-                        p.life = 100
+                        p._points -= REZ
+                        p._life = 100
                     else:
                         p._life = 0 # Pour ne pas avoir un nombre négatif constamment à l'écran
                         p._alive = False
@@ -287,62 +292,120 @@ class Map: # Fait tous les calculs en interne
     def drawText(self, text, position, color = (0,0,0)):
         self._game.blit(self._font.render(text,1,color),position)
 
-
+    
 def AStar(m : Map, p : Player, to_ressources = True):
     if to_ressources:
+        #print("A* commencé")
         goal_couple = m._best_influence_map[1]
-        base_cost = m._best_influence_map[0] + 1 # a ajouter a toutes les cases  pour calculer le poids (donc strict. psitif)
-
+        if m._best_influence_map[0] <= 0:
+            base_cost =  - m._best_influence_map[0] + 0.1 # a ajouter a toutes les cases  pour calculer le poids (donc strict. psitif)
+        else:
+            base_cost = 0 #pas besoin de shift les valeurs en positif, elles le sont déjà toutes (presque impossible)
+        come_from = np.zeros(board_size, dtype = int) # On va faire 1=bas / 2=droite / 3=haut / 4=gauche
+                                                      #(pour éviter de devoir stocker des tuples)
+        current_min_dist_in_heap = np.ones(board_size, dtype = int) * 65000 # Pour savoir si on doit le rempiler ou non
+        
         states = np.zeros(board_size, dtype = int) # not seen == 0 / seen (neighbours) == 1 / integrated == 2
+        states[p._x][p._y] = 1 # La case du joueur est celle de départ
         neighbours = [(np.sqrt( (p._x - goal_couple[0])**2 + (p._y - goal_couple[1])**2) + 0,(p._x, p._y))] #np.sqrt( (p._x - i)**2 + (p._y - j)**2) + deja_fait
         heapq.heapify(neighbours)
 
         while neighbours != []:
-            current = heapq.heappop(neighbours)
+            current = heapq.heappop(neighbours)[1]
+            #print("CURRENT:", current)
             if current == goal_couple:
-                # comaprer tous ses voisins pour savoir duquel je viens
-                #(donc du voisin intégré le plus proche, en pensant à prendre en compte le poids !
+                #print("A* fini")
+                res_list = []
+                while current != (p._x, p._y): # La liste se termine donc par le premier mouvement
+                    res_list.append(current)
+                    if come_from[current[0]][current[1]] == 1:
+                        current = (current[0], current[1] - 1)
+                    elif come_from[current[0]][current[1]] == 3:
+                        current = (current[0], current[1] + 1)
+                    elif come_from[current[0]][current[1]] == 2:
+                        current = (current[0] + 1, current[1])
+                    elif come_from[current[0]][current[1]] == 4:
+                        current = (current[0] - 1, current[1])
+                #print("Liste resultat A*:",res_list)
+                return res_list
+            
+            elif states[current[0]][current[1]] == 1: # Si le noeud n'a pas déjà été processed
+                                                      # (possible si on rempile une seconde fois
+                                                      # un noeud avec une valeur inférieure)
+                states[current[0]][current[1]] = 2
+
+                # Maintenant, les voisins (penser à définir ici leur come_from, pour ne pas avoir à le chercher plus tard)
+                neighbours_to_check = [((current[0],current[1] + 1),1),((current[0],current[1] - 1),3),
+                                       ((current[0] + 1,current[1]),4),((current[0] - 1,current[1]),2)]
+                for i in range(4):
+                    current_neighbour = neighbours_to_check[i][0]
+                    current_direction = neighbours_to_check[i][1]
+                    if current_neighbour[0] >= 0 and current_neighbour[0] < board_size[0] and current_neighbour[1] >= 0 and current_neighbour[1] < board_size[1]:
+                        #print("le voisin est check")
+                        if states[current_neighbour[0]][current_neighbour[1]] != 2:
+                            if (states[current_neighbour[0]][current_neighbour[1]] != 0):
+                                tempo = current_min_dist_in_heap[current_neighbour[0]][current_neighbour[1]] + (base_cost + m._influence_map[current_neighbour[0]][current_neighbour[1]])
+                            else:
+                                tempo = (base_cost + m._influence_map[current_neighbour[0]][current_neighbour[1]])
+                            #print("TEMPO:",tempo, m._influence_map[current_neighbour[0]][current_neighbour[1]], base_cost)
+                            if (current_min_dist_in_heap[current_neighbour[0]][current_neighbour[1]] > tempo) :
+                                #print("voisin empilé")
+                                current_min_dist_in_heap[current_neighbour[0]][current_neighbour[1]] = tempo
+                                heapq.heappush(neighbours,(tempo + np.sqrt( (current_neighbour[0] - goal_couple[0])**2 +
+                                                                            (current_neighbour[1] - goal_couple[1])**2),
+                                                           (current_neighbour[0], current_neighbour[1])))
+                                states[current_neighbour[0]][current_neighbour[1]] = 1
+                                come_from[current_neighbour[0]][current_neighbour[1]] = current_direction
 
     else:
+        return []
         
 
-def IA(t, m : Map, p : Player):
+def IA(m : Map, p : Player):
 
     if (p._alive):
     ############### PARTIE CREATION CARTE D'INFLUENCE ###############
-        if m._influence_map == None: 
+        if m._influence_map is None: 
             influence = np.zeros(board_size, dtype = float)
 
             for i in range(board_size[0]):
                 for j in range(board_size[1]):
-                    influence[i][j] -= m._corruption_map[i][j]
+                    influence[i][j] += m._corruption_map[i][j] * MAX_RESSOURCE_VALUE * len(m._ressources)
+                    #TODO: vérifier qu'il n'est pas possible que l'IA attende sur du creep si la récompense est trop bonne
 
             for o in m._corruption_origins:
         
-                for i in range(3):
-                    for j in range(3 - i):
+                for i in range(10):
+                    for j in range(10 - i):
                         tempo = 1 + i + j # Harmonique
-                        influence[o[0] + i][o[1] + j] -=  ORIGIN_DANGER / tempo
-                        influence[o[0] + i][o[1] - j] -=  ORIGIN_DANGER / tempo
-                        influence[o[0] - i][o[1] + j] -=  ORIGIN_DANGER / tempo
-                        influence[o[0] - i][o[1] - j] -=  ORIGIN_DANGER / tempo
+                        if (o[0] + i) < board_size[0] and (o[1] + j) < board_size[1]:
+                            influence[o[0] + i][o[1] + j] +=  ORIGIN_DANGER / tempo
+                        if (o[0] + i) < board_size[0] and (o[1] + j) >= 0:
+                            influence[o[0] + i][o[1] - j] +=  ORIGIN_DANGER / tempo
+                        if (o[0] + i) >= 0 and (o[1] + j) < board_size[1]:
+                            influence[o[0] - i][o[1] + j] +=  ORIGIN_DANGER / tempo
+                        if (o[0] + i) >= 0 and (o[1] + j) >= 0:
+                            influence[o[0] - i][o[1] - j] +=  ORIGIN_DANGER / tempo
 
             for r in m._ressources:
 
                 for i in range(10):
                     for j in range(10 - i):
                         tempo = (i + j + 1)**2 # Real gain
-                        influence[o[0] + i][o[1] + j] +=  ORIGIN_DANGER / tempo
-                        influence[o[0] + i][o[1] - j] +=  ORIGIN_DANGER / tempo
-                        influence[o[0] - i][o[1] + j] +=  ORIGIN_DANGER / tempo
-                        influence[o[0] - i][o[1] - j] +=  ORIGIN_DANGER / tempo
+                        if (r._x + i) < board_size[0] and (r._y + j) < board_size[1]:
+                            influence[r._x + i][r._y + j] -=  ORIGIN_DANGER / tempo
+                        if (r._x + i) < board_size[0] and (r._y + j) >= 0:
+                            influence[r._x + i][r._y - j] -=  ORIGIN_DANGER / tempo
+                        if (r._x + i) >= 0 and (r._y + j) < board_size[1]:
+                            influence[r._x - i][r._y + j] -=  ORIGIN_DANGER / tempo
+                        if (r._x + i) >= 0 and (r._y + j) >= 0:
+                            influence[r._x - i][r._y - j] -=  ORIGIN_DANGER / tempo
             m._influence_map = influence
     ############### PARTIE CREATION STRATEGIE (déplacement) ###############
-        if m._best_influence_map == None: # Normalement lié avec la condition d'avant
     #Trouver la meilleure case (score le plus haut + le plus proche (en ligne droite, ou si des obstacles
     # utiliser prétraitement))
     # TODO: Si le temps, rajouter des obstacles
-            current = - ORIGIN_DANGER * 7 - 1 # Théoriquement, inférieur au minimum atteignable
+            current = 10000 #- ORIGIN_DANGER * 7 - 1 # Théoriquement, inférieur au minimum atteignable
     # (! pas tout à fait si superposition d'origines !) -> aucune importance en pratique,
     #il existe toujours des cases meilleures dans ce cas-là
             curr_dist = -1
@@ -350,7 +413,7 @@ def IA(t, m : Map, p : Player):
 
             for i in range(board_size[0]):
                 for j in range(board_size[1]):
-                    if influence[i][j] > current:
+                    if influence[i][j] < current:
                         current = influence[i][j]
                         curr_couple = (i,j)
                     elif influence[i][j] == current:
@@ -373,12 +436,10 @@ def main():
     game_map = Map()
     done = False
     clock = pygame.time.Clock()
-    delta = 0.0
     while done == False:
         x = 0
         y = 0
-        ms = clock.tick(30) / 1000
-        delta += ms
+        ms = clock.tick(20) / 1000
         game_map.update(ms)
         bs = pygame.key.get_pressed()
         if bs[pygame.K_LEFT]:
@@ -401,18 +462,46 @@ def main():
                 #scene.recordMouseMove(event.dict['pos'])
         game_map.drawMe()
         pygame.display.flip()
-        if delta >= DELTA_THRESHOLD:
-            delta = 0
-            for i in range(len(game_map._players)):
-                p = game_map._players[i] 
-                if p._name == "Joueur":
+        for i in range(len(game_map._players)):
+            p = game_map._players[i] 
+            p._delta += ms
+            if p._name == "Joueur":
+                #print("Joueur détecté")
+                if p._delta >= DELTA_THRESHOLD:
+                    #print("temps écoulé")
+                    p._delta = 0
+
+                    #Repeindre l'ancienne case en corruption
                     game_map._screen[p._x][p._y][0] = 255
                     game_map._screen[p._x][p._y][1] = 255 * (1 -  game_map._corruption_map[p._x][p._y])
                     game_map._screen[p._x][p._y][2] = 255
+
+                    # Mettre à jour la position
                     if p._x + x >= 0 and p._x + x < board_size[0]:
                         p._x += x
                     if p._y + y >= 0 and p._y + y < board_size[1]:
                         p._y += y
+                
+                    
+            elif p._name == "IA":
+                #print("IA détectée")
+                if p._delta * 10 / (DESCRIPTION_IA_LEVEL[p._IA_power]) >= p._nb_moves: # On peut bouger jusqu'à 10 fois entre 2 calculs de path
+                    p._nb_moves += 1
+                    if p._path != []:
+                        #Repeindre l'ancienne case en corruption
+                        game_map._screen[p._x][p._y][0] = 255
+                        game_map._screen[p._x][p._y][1] = 255 * (1 -  game_map._corruption_map[p._x][p._y])
+                        game_map._screen[p._x][p._y][2] = 255
+                        #print("Chemin à suivre:",p._path)
+                        curr_move = p._path.pop()
+                        p._x = curr_move[0]
+                        p._y = curr_move[1]
+                if p._delta >= DESCRIPTION_IA_LEVEL[p._IA_power]:
+                    #print("temps écoulé")
+                    IA(game_map, p)
+                    p._delta = 0
+                    p._nb_moves = 1
+                
                     
     pygame.quit()
 

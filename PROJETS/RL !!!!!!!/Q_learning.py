@@ -22,7 +22,7 @@ class Game:
     
     num_actions = len(ACTIONS)
     
-    def __init__(self, n, m, wrong_action_p=0.1, alea=False, distrib_winds = [2,1]): # La distribution commence à 1
+    def __init__(self, n, m, wrong_action_p=0.1, alea=False, distrib_winds = [3,0]): # La distribution commence à 1
         self.n = n
         self.m = m
         self.wrong_action_p = wrong_action_p
@@ -123,27 +123,29 @@ class Game:
         if self.counter > 190: # pour celui-la et le suivant, n'etant pas de vrais mouvements
             # mais plutot une gestion de potentielles erreurs, pas de vent
             self.position = x, y
-            return self._get_state(), -10, True, self.possible_moves(x, y)
+            return self._get_state(), -10, True, self.possible_moves(x, y), action
         elif new_x >= self.n or new_y >= self.m or new_x < 0 or new_y < 0: # Nope
-            return self._get_state(), -1, False, self.ACTIONS
-        elif self.block == (new_x, new_y):
-            return self._get_state(), -1, False, self.possible_moves(new_x, new_y)
+            return self._get_state(), -1, False, self.ACTIONS, action
+        elif self.block == (new_x, new_y): # TODO: CORRIGER LE PROBLEME QUAND ON EST POUSSE SUR LE BLOCK, ON DOIT REVENIR EN DESSOUS,
+                                           # ET PAS ANNULER LE DEPLACEMENT EN ENTIER !!!
+            return self._get_state(), -1, False, self.possible_moves(new_x, new_y), action
         elif self.hole == (new_x, new_y):
             self.position = new_x, new_y
-            return self._get_state(), -10, True, None
-        elif self.end == (new_x, new_y):
+            return self._get_state(), -10, True, None, action
+        elif self.end == (new_x, new_y): # TODO: Réflechir à si c'est une bonne idée de devoir FINIR son tour dessus,
+                                         # et pas juste le survoler (donc beaucoup plus complexe et crée énormément de parties impossibles)
             self.position = new_x, new_y
-            return self._get_state(), 10, True, self.possible_moves(new_x, new_y)
+            return self._get_state(), 10, True, self.possible_moves(new_x, new_y), action
         else:
             self.position = new_x, new_y
-            return self._get_state(), -1, False, self.possible_moves(new_x, new_y)
+            return self._get_state(), -1, False, self.possible_moves(new_x, new_y), action
         
     def print(self):
         string = ""
         for i in range(self.n - 1, -1, -1):
             for j in range(self.m):
                 if (i, j) == self.position:
-                    string += "x"
+                    string += "M"
                 elif (i, j) == self.block:
                     string += "o"
                 elif (i, j) == self.hole:
@@ -158,17 +160,21 @@ class Game:
         string += "\n"
         print(string)        
 
+def print_path(path, g):
+    for m in path:
+        print(g.ACTIONS_NAMES[m][0], end=" ")
+    print()
+
 length_x = 4
 length_y = 5 # cette longueur doit etre superieure a la premiere, sinon l'id n'est pas unique
 
 
-
-game = Game(length_x, length_y, wrong_action_p = 0.00001)
-alpha = 0.5 # 50% d'apprentissage par tour donc
-gamma = 0.7 # Décroissance exponentielle
+game = Game(length_x, length_y, wrong_action_p = 0.1)
+alpha = 0.3 # 50% d'apprentissage par tour donc
+gamma = 1.0 # Décroissance exponentielle
 Q_values = np.zeros((length_x * length_y, game.num_actions), dtype = float)
 
-NB_EPOCHS = 100 * length_x * length_y
+NB_EPOCHS = 200 # * length_x * length_y
 game.print()
 for epoch in range(NB_EPOCHS):
     game.reset()
@@ -201,7 +207,7 @@ for epoch in range(NB_EPOCHS):
             curr_move = possible_actions[np.argmax(curr_weights)]
             
         # On bouge dans la direction voulue
-        future_state, curr_reward, game_over, possible_actions = game.move(curr_move)
+        future_state, curr_reward, game_over, possible_actions, curr_move = game.move(curr_move)
 
         total_reward += curr_reward
     
@@ -223,6 +229,7 @@ for epoch in range(NB_EPOCHS):
     print("PATH:", moves)
 game.reset()
 print("TERRAIN:",game.print())
-print("MOVES:", moves)
+print("MOVES:", end="")
+print_path(moves, game)
 print("FINAL Q VALUES:", Q_values)
 
