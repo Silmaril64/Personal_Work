@@ -133,7 +133,7 @@ class Game:
         ### BLOCK ###
         elif self.block == (new_x_without_wind, new_y): # En premier, pour simplifier celui d'après (ne pas avoir à gérer un cas complexe)
             tempo_x = min(self.n-1, x + self.winds[y])
-            self.position = temp_x, y
+            self.position = tempo_x, y
             return self._get_state(), -1, False, self.possible_moves(tempo_x, y), action
         
         elif self.block == (new_x, new_y): # Lorsqu'on heurte un bloc en étant poussé par le vent, on revient en dessous, et on applique cette case (trou ou victoire)
