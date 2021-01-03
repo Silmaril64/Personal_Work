@@ -116,26 +116,55 @@ class Game:
         d_x, d_y = self.MOVEMENTS[action]
         x, y = self.position
         new_y = min( self.m -1, max(0, y + d_y))
-        new_x = min(self.n-1,max(0,x + d_x + self.winds[new_y])) # TODO: on peut faire plus complexe,
-        #cad d'abord mettre malus puis souffler 
+        new_x_without_wind = min(self.n-1,max(0,x + d_x))
+        new_x =  min(self.n-1, new_x_without_wind + self.winds[new_y])
+        # On peut faire plus complexe,
+        #cad d'abord mettre malus/bonus puis souffler 
 
 
-        if self.counter > 190: # pour celui-la et le suivant, n'etant pas de vrais mouvements
-            # mais plutot une gestion de potentielles erreurs, pas de vent
+        if self.counter > 190: # Pour celui-la et le suivant, n'etant pas de vrais mouvements
+                               #mais plutot une gestion de potentielles erreurs, pas de vent
             self.position = x, y
             return self._get_state(), -10, True, self.possible_moves(x, y), action
-        elif new_x >= self.n or new_y >= self.m or new_x < 0 or new_y < 0: # Nope
+        
+        elif new_x >= self.n or new_y >= self.m or new_x < 0 or new_y < 0: # En théorie, pris en compte par le min(max())
             return self._get_state(), -1, False, self.ACTIONS, action
-        elif self.block == (new_x, new_y): # TODO: CORRIGER LE PROBLEME QUAND ON EST POUSSE SUR LE BLOCK, ON DOIT REVENIR EN DESSOUS,
-                                           # ET PAS ANNULER LE DEPLACEMENT EN ENTIER !!!
-            return self._get_state(), -1, False, self.possible_moves(new_x, new_y), action
+        
+        ### BLOCK ###
+        elif self.block == (new_x_without_wind, new_y): # En premier, pour simplifier celui d'après (ne pas avoir à gérer un cas complexe)
+            tempo_x = min(self.n-1, x + self.winds[y])
+            self.position = temp_x, y
+            return self._get_state(), -1, False, self.possible_moves(tempo_x, y), action
+        
+        elif self.block == (new_x, new_y): # Lorsqu'on heurte un bloc en étant poussé par le vent, on revient en dessous, et on applique cette case (trou ou victoire)
+                                           #alors que si l'on marche dessus avant le vent, on reste à la même place, en étant poussé par le vent de cette case
+            
+            tempo_x = max(0, new_x - 1) # En théorie, le max n'est pas nécessaire dû à la précédente condition (la seule possibilité pour qu'on soit collé au bas de
+                                        #l'écran et qu'on ait un bloc sous les pied est qu'il n'y ait pas de vent dans la colonne (équivalent à new_x == new_x_without_wind))
+            self.position = tempo_x, new_y
+            if self.hole == (tempo_x, new_y):
+                return self._get_state(), -10, True, None, action
+            elif self.end == (tempo_x, new_y):
+                return self._get_state(), 10, True, self.possible_moves(tempo_x, new_y), action
+            else:
+                return self._get_state(), -1, False, self.possible_moves(tempo_x, new_y), action
+
+
+        ### END BLOCK ###
+        
         elif self.hole == (new_x, new_y):
             self.position = new_x, new_y
             return self._get_state(), -10, True, None, action
-        elif self.end == (new_x, new_y): # TODO: Réflechir à si c'est une bonne idée de devoir FINIR son tour dessus,
-                                         # et pas juste le survoler (donc beaucoup plus complexe et crée énormément de parties impossibles)
-            self.position = new_x, new_y
-            return self._get_state(), 10, True, self.possible_moves(new_x, new_y), action
+        
+        elif self.end == (new_x, new_y) or self.end == (new_x_without_wind, new_y): # On gagne si on marche sur la case de fin
+                                                                                    #(donc avant ou après l'application du vent, la survoler ne suffit pas)
+            if self.end == (new_x, new_y):
+                self.position = new_x, new_y
+                return self._get_state(), 10, True, self.possible_moves(new_x, new_y), action
+            else:
+                self.position = new_x_without_wind, new_y
+                return self._get_state(), 10, True, self.possible_moves(new_x_without_wind, new_y), action
+            
         else:
             self.position = new_x, new_y
             return self._get_state(), -1, False, self.possible_moves(new_x, new_y), action
