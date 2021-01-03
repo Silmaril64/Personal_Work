@@ -201,7 +201,7 @@ def print_path(path, g):
     print()
 
 length_x = 4
-length_y = 5 # cette longueur doit etre superieure a la premiere, sinon l'id n'est pas unique
+length_y = 5 # Cette longueur doit etre superieure a la premiere, sinon l'id n'est pas unique
 WRONG = 0.1
 TEST_WRONG = 0.0
 
@@ -237,11 +237,11 @@ for epoch in range(NB_EPOCHS):
         if not(maximum):
             tempo = np.min(curr_weights)
             if tempo < 0:
-                #print(Q_values[state] - tempo + 0.1)
                 curr_move = random.choices(possible_actions, curr_weights - tempo + mini_random, k = 1)[0]
             else:
                 curr_move = random.choices(possible_actions, curr_weights + mini_random, k = 1)[0]
         else:
+            print("Q_values of the state:",Q_values[state])
             curr_move = possible_actions[np.argmax(curr_weights)]
             
         # On bouge dans la direction voulue
@@ -253,14 +253,12 @@ for epoch in range(NB_EPOCHS):
         for i in range(game.num_actions):
             if move_maxi < Q_values[future_state][i]:
                 move_maxi = Q_values[future_state][i]
-        #print("4", end = "")
+
         Q_values[state][curr_move] = Q_values[state][curr_move] + alpha * (curr_reward +
                                                                             gamma * move_maxi -
                                                                             Q_values[state][curr_move])
         state = future_state
         moves.append(curr_move)
-        #print("5")
-        #print(game.counter)
 
     
     print("FINISHED ! TOTAL REWARD:", total_reward)
