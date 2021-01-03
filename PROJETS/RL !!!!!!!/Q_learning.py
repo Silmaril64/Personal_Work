@@ -224,6 +224,7 @@ for epoch in range(NB_EPOCHS):
     if epoch != NB_EPOCHS - 1:
         mini_random = 0.05
         maximum = False
+        game.wrong_action_p = 0.0
     else:
         mini_random = 0.0
         maximum = True
