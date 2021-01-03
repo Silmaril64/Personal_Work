@@ -242,7 +242,7 @@ for epoch in range(NB_EPOCHS):
                 curr_move = random.choices(possible_actions, curr_weights + mini_random, k = 1)[0]
         else:
             print("Q_values of the state:",Q_values[state])
-            print("current weights:",curr_weights)
+            print("current weights:",curr_weights, " / and choice:", np.argmax(curr_weights))
             curr_move = possible_actions[np.argmax(curr_weights)]
             
         # On bouge dans la direction voulue
