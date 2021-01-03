@@ -151,10 +151,16 @@ class Game:
 
 
         ### END BLOCK ###
-        
+
+        ### HOLE ###
+        elif self.hole == (new_x_without_wind, new_y):
+            self.position = new_x_without_wind, new_y
+            return self._get_state(), -10, True, None, action
+            
         elif self.hole == (new_x, new_y):
             self.position = new_x, new_y
             return self._get_state(), -10, True, None, action
+        ### END HOLE ###
         
         elif self.end == (new_x, new_y) or self.end == (new_x_without_wind, new_y): # On gagne si on marche sur la case de fin
                                                                                     #(donc avant ou après l'application du vent, la survoler ne suffit pas)
