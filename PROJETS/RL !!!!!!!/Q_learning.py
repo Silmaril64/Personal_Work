@@ -206,8 +206,8 @@ WRONG = 0.1
 TEST_WRONG = 0.0
 
 game = Game(length_x, length_y, wrong_action_p = WRONG)
-alpha = 0.3 # 50% d'apprentissage par tour donc
-gamma = 1.0 # Décroissance exponentielle
+alpha = 0.2 # 20% d'apprentissage par tour donc
+gamma = 0.9 # Décroissance exponentielle
 Q_values = np.zeros((length_x * length_y, game.num_actions), dtype = float)
 
 NB_EPOCHS = 200 # * length_x * length_y
