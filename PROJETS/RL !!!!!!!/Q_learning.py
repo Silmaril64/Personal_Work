@@ -202,9 +202,9 @@ def print_path(path, g):
 
 length_x = 4
 length_y = 5 # cette longueur doit etre superieure a la premiere, sinon l'id n'est pas unique
+WRONG = 0.1
 
-
-game = Game(length_x, length_y, wrong_action_p = 0.1)
+game = Game(length_x, length_y, wrong_action_p = WRONG)
 alpha = 0.3 # 50% d'apprentissage par tour donc
 gamma = 1.0 # Décroissance exponentielle
 Q_values = np.zeros((length_x * length_y, game.num_actions), dtype = float)
@@ -228,6 +228,7 @@ for epoch in range(NB_EPOCHS):
     else:
         mini_random = 0.0
         maximum = True
+        game.wrong_action_p = WRONG
     while not(game_over):
 
         # On choisit la meilleure direction grâce aux informations connues
