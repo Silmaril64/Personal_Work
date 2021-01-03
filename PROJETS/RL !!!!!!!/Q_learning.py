@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import random
 import numpy as np
 # zemmari@labri.fr -> a modifier pour implementer les vents qui deplacent de
@@ -22,7 +25,7 @@ class Game:
     
     num_actions = len(ACTIONS)
     
-    def __init__(self, n, m, wrong_action_p=0.1, alea=False, distrib_winds = [3,0]): # La distribution commence à 1
+    def __init__(self, n, m, wrong_action_p=0.1, alea=False, distrib_winds = [3,0]): # La distribution commence a 1
         self.n = n
         self.m = m
         self.wrong_action_p = wrong_action_p
@@ -30,7 +33,7 @@ class Game:
         self.winds = np.zeros(m, dtype = int)
         for i in range(len(distrib_winds)):
             for n in range(distrib_winds[i]):
-                self.winds[random.randint(0, m-1)] += i + 1 # On peut donc créer des vents très forts
+                self.winds[random.randint(0, m-1)] += i + 1 # On peut donc creer des vents tres forts
         self.generate_game()
         
     def _position_to_id(self, x, y):
@@ -38,7 +41,7 @@ class Game:
         return x + y * self.n
     
     def _id_to_position(self, id):
-        """RÃ©ciproque de la fonction prÃ©cÃ©dente"""
+        """Reciproque de la fonction precedente"""
         return (id % self.n, id // self.n)
     
     def generate_game(self):
@@ -133,8 +136,17 @@ class Game:
         ### BLOCK ###
         elif self.block == (new_x_without_wind, new_y): # En premier, pour simplifier celui d'après (ne pas avoir à gérer un cas complexe)
             tempo_x = min(self.n-1, x + self.winds[y])
+            if self.block == (tempo_x, y): # Donc le cas où le bloc est vers le haut et où il y a du vent
+                self.position = x, y
+                return self._get_state(), -1, False, self.possible_moves(x, y), action
+                
             self.position = tempo_x, y
-            return self._get_state(), -1, False, self.possible_moves(tempo_x, y), action
+            if self.hole == (tempo_x, y):
+                return self._get_state(), -10, True, self.possible_moves(tempo_x, y), action
+            elif self.end == (tempo_x, y):
+                return self._get_state(), 10, True, self.possible_moves(tempo_x, y), action
+            else:
+                return self._get_state(), -1, False, self.possible_moves(tempo_x, y), action
         
         elif self.block == (new_x, new_y): # Lorsqu'on heurte un bloc en étant poussé par le vent, on revient en dessous, et on applique cette case (trou ou victoire)
                                            #alors que si l'on marche dessus avant le vent, on reste à la même place, en étant poussé par le vent de cette case
@@ -174,7 +186,7 @@ class Game:
         else:
             self.position = new_x, new_y
             return self._get_state(), -1, False, self.possible_moves(new_x, new_y), action
-        
+
     def print(self):
         string = ""
         for i in range(self.n - 1, -1, -1):
@@ -206,11 +218,11 @@ WRONG = 0.1
 TEST_WRONG = 0.0
 
 game = Game(length_x, length_y, wrong_action_p = WRONG)
-alpha = 0.2 # 20% d'apprentissage par tour donc
-gamma = 0.9 # Décroissance exponentielle
+alpha = 0.25 # 25% d'apprentissage par tour donc
+gamma = 0.5 # Décroissance exponentielle
 Q_values = np.zeros((length_x * length_y, game.num_actions), dtype = float)
 
-NB_EPOCHS = 200 # * length_x * length_y
+NB_EPOCHS = 500 # * length_x * length_y
 game.print()
 for epoch in range(NB_EPOCHS):
     game.reset()
@@ -225,11 +237,12 @@ for epoch in range(NB_EPOCHS):
     if epoch != NB_EPOCHS - 1:
         mini_random = 0.05
         maximum = False
-        game.wrong_action_p = TEST_WRONG
+        game.wrong_action_p = WRONG
+        
     else:
         mini_random = 0.0
         maximum = True
-        game.wrong_action_p = WRONG
+        game.wrong_action_p = TEST_WRONG
     while not(game_over):
 
         # On choisit la meilleure direction grâce aux informations connues
@@ -242,8 +255,8 @@ for epoch in range(NB_EPOCHS):
                 curr_move = random.choices(possible_actions, curr_weights + mini_random, k = 1)[0]
         else:
             print("Q_values of the state:",Q_values[state])
-            print("current weights:",curr_weights, " / and choice:", np.argmax(curr_weights))
             curr_move = possible_actions[np.argmax(curr_weights)]
+            print("current weights:",curr_weights, " / and choice:", np.argmax(curr_weights), " / current move:", curr_move)
             
         # On bouge dans la direction voulue
         future_state, curr_reward, game_over, possible_actions, curr_move = game.move(curr_move)
