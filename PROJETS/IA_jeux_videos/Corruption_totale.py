@@ -4,6 +4,7 @@ import pygame.draw
 import random
 import numpy as np
 import heapq
+import time
 
 #Système de carte d'influence
 
@@ -23,7 +24,7 @@ import heapq
 
 #ON POURRAIT ETRE CORROMPU EN MOURANT ET ESSAYER DE TUER LES AUTRES EN LES TOUCHANT !!!
 
-board_size = (50,50) 
+board_size = (75,75) 
 square_size = 15
 screen_size = (board_size[0] * square_size, board_size[1] * square_size)
 
@@ -267,6 +268,10 @@ class Map: # Fait tous les calculs en interne
                 else:
                     self._screen[p._x][p._y][1] = 0
                 self._screen[p._x][p._y][2] = 255
+            else:
+                self._screen[p._x][p._y][0] = 212
+                self._screen[p._x][p._y][1] = 235
+                self._screen[p._x][p._y][2] = 81
         return
 
     def drawMe(self):
@@ -357,7 +362,7 @@ def AStar(m : Map, p : Player, to_ressources = True):
                                 states[current_neighbour[0]][current_neighbour[1]] = 1
                                 come_from[current_neighbour[0]][current_neighbour[1]] = current_direction
 
-    else:
+    else: # Dead zombie mode not implemented, please buy the DLC at GiveMeYourMoneyPls.fr
         return []
         
 
@@ -375,8 +380,8 @@ def IA(m : Map, p : Player):
 
             for o in m._corruption_origins:
         
-                for i in range(10):
-                    for j in range(10 - i):
+                for i in range(3):
+                    for j in range(3 - i):
                         tempo = 1 + i + j # Harmonique
                         if (o[0] + i) < board_size[0] and (o[1] + j) < board_size[1]:
                             influence[o[0] + i][o[1] + j] +=  ORIGIN_DANGER / tempo
@@ -405,24 +410,26 @@ def IA(m : Map, p : Player):
     #Trouver la meilleure case (score le plus haut + le plus proche (en ligne droite, ou si des obstacles
     # utiliser prétraitement))
     # TODO: Si le temps, rajouter des obstacles
-            current = 10000 #- ORIGIN_DANGER * 7 - 1 # Théoriquement, inférieur au minimum atteignable
+        current = 10000 #- ORIGIN_DANGER * 7 - 1 # Théoriquement, inférieur au minimum atteignable
     # (! pas tout à fait si superposition d'origines !) -> aucune importance en pratique,
     #il existe toujours des cases meilleures dans ce cas-là
-            curr_dist = -1
-            curr_couple = (-1,-1)
+        curr_dist = -1
+        curr_couple = (-1,-1)
 
-            for i in range(board_size[0]):
-                for j in range(board_size[1]):
-                    if influence[i][j] < current:
+        for i in range(board_size[0]):
+            for j in range(board_size[1]):
+                if m._influence_map[i][j] < current:
+                    current = m._influence_map[i][j]
+                    curr_couple = (i,j)
+                elif m._influence_map[i][j] == current:
+                    tempo = np.sqrt( (p._x - i)**2 + (p._y - j)**2) # Garder le plus proche de nous
+                    if tempo < curr_dist:
+                        print("CHANGEMENT !!! current: ", current, "curr_couple: ", curr_couple)
+                        curr_dist = tempo
                         current = influence[i][j]
                         curr_couple = (i,j)
-                    elif influence[i][j] == current:
-                        tempo = np.sqrt( (p._x - i)**2 + (p._y - j)**2) # Garder le plus proche de nous
-                        if tempo < curr_dist:
-                            curr_dist = tempo
-                            current = influence[i][j]
-                            curr_couple = (i,j)
-            m._best_influence_map = (current, curr_couple)
+        m._best_influence_map = (current, curr_couple)
+        print("current: ", current, "curr_couple: ", curr_couple)
     # Maintenant, il faut trouver un bon chemin pour y arriver, et le stocker en attendant de recalculer
     # (penser à le stocker en sens inverse pour pop gratuitement)
 
@@ -436,7 +443,10 @@ def main():
     game_map = Map()
     done = False
     clock = pygame.time.Clock()
+    alive_players = 0
     while done == False:
+        last_alive = alive_players
+        alive_players = 0
         x = 0
         y = 0
         ms = clock.tick(20) / 1000
@@ -463,7 +473,9 @@ def main():
         game_map.drawMe()
         pygame.display.flip()
         for i in range(len(game_map._players)):
-            p = game_map._players[i] 
+            p = game_map._players[i]
+            if p._alive == True:
+                alive_players = i + 1
             p._delta += ms
             if p._name == "Joueur":
                 #print("Joueur détecté")
@@ -501,9 +513,15 @@ def main():
                     IA(game_map, p)
                     p._delta = 0
                     p._nb_moves = 1
-                
                     
+        if alive_players == 0:
+            done = True
+    p = game_map._players[0]   
+    game_map._game.blit(game_map._font.render(" Game Finished !!!" ,1,(0,0,0)),(0, screen_size[1] / 2.1))
+    pygame.display.flip()
+    time.sleep(10)
     pygame.quit()
 
 if not sys.flags.interactive: main()
     
+#screen_size
