@@ -339,6 +339,5 @@ def main():
     torch.save(trans_A_to_B.state_dict(), "./trans_A_to_B") # save the model
     torch.save(discr_A.state_dict(), "./discr_A") # save the model
     torch.save(discr_B.state_dict(), "./discr_B") # save the model
-    #input = torch.randn(20, 3, 50, 50)
 
 main()
